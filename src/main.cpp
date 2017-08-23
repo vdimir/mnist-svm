@@ -12,9 +12,6 @@ extern "C" {
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-#include <opencv2/features2d/features2d.hpp>
-#include <cv.h>
-
 using namespace cv;
 
 #include "InputFileEntry.h"
@@ -31,18 +28,25 @@ void run_model(const string &inp, const string &model_file, const string &out, F
 void cmd_args_guard(bool cond, const string& prog);
 
 int main (int argc, const char * argv[]) {
-    cmd_args_guard(argc > 2, argv[0]);
+    cmd_args_guard(argc > 3, argv[0]);
+//    cout << CV_VERSION << endl;
 
-    RawImageExtractor ext;
+    unique_ptr<FeatureExtractor> ext;
+    if (string("raw").compare(argv[2]) == 0) {
+        ext = unique_ptr<FeatureExtractor>(new RawImageExtractor());
+    } else {
+        ext = unique_ptr<FeatureExtractor>(new HogExtractor());
+    }
+
     if (string("train").compare(argv[1]) == 0) {
-        cmd_args_guard(argc == 4, argv[0]);
+        cmd_args_guard(argc == 5, argv[0]);
 
-        build_model(argv[2], argv[3], ext);
+        build_model(argv[3], argv[4], *ext);
         return 0;
     }
     if (string("test").compare(argv[1]) == 0) {
-        cmd_args_guard(argc == 5, argv[0]);
-        run_model(argv[2], argv[3], argv[4], ext);
+        cmd_args_guard(argc == 6, argv[0]);
+        run_model(argv[3], argv[4], argv[5], *ext);
         return 0;
     }
     cmd_args_guard(false, argv[0]);
@@ -65,8 +69,9 @@ bool read_input_file(const string& fname, vector<T>& out) {
 
 void cmd_args_guard(bool cond, const string& prog) {
     if (cond) { return; }
-    cout << "Usage: " << prog << " train <input-file.txt> <output-file.dat>" << endl
-         << "or: " << prog << " test <input-file.txt> <model.dat> <output-file.txt>"<< endl;
+    cout << "Usage: " << prog << " train <mode> <input-file.txt> <output-file.dat>" << endl
+         << "or: " << prog << " test <mode> <input-file.txt> <model.dat> <output-file.txt>"<< endl
+         << "mode: raw|proc" << endl;
     exit(0);
 }
 
@@ -82,8 +87,8 @@ void build_model(const string &inp, const string &out, FeatureExtractor& ext) {
     bool succ_read = read_input_file(inp, input_data);
     ASSERT(succ_read, "Error reading file: " << inp);
 
-    cout << "Read data..." << endl;
-    SvmClassifierBuilder clfb(VlSvmSolverSgd, 0.01);
+    cout << "Read and process data..." << endl;
+    SvmClassifierBuilder clfb(VlSvmSolverSgd, 0.001);
     for (auto e: input_data) {
         Mat img = try_read_image(e.get_fname());
         auto data = ext.extract_feature(img);

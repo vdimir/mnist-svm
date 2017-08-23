@@ -17,4 +17,4 @@ with open(sys.argv[1]) as f:
 
 print("accuracy: ", accuracy_score(y_true, y_pred))
 print("confusion matrix: ")
-# print(confusion_matrix(y_true, y_pred))
+print(confusion_matrix(y_true, y_pred))

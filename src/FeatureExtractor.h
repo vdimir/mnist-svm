@@ -3,6 +3,8 @@
 #define TASK_FEATUREEXTRACTOR_H
 
 #include <opencv2/core/core.hpp>
+#include <opencv/cv.hpp>
+
 #include "Svm.h"
 
 class FeatureExtractor {
@@ -26,21 +28,17 @@ public:
 
 class HogExtractor : public FeatureExtractor {
     vector<double> features;
+    HOGDescriptor hog;
 public:
-    virtual result_type extract_feature(Mat& img) {
-        HOGDescriptor hog(
-                Size(20,20), //winSize
-                Size(5,5), //blocksize
-                Size(5,5), //blockStride,
-                Size(5,5), //cellSize,
-                8, //nbins,
-                -1,
-                0.2,
-                true,
-                64);
+    HogExtractor() : FeatureExtractor(),
+                     hog(Size(20,20), Size(5,5), Size(5,5), Size(5,5), 8, -1, 0.2, true, 64)
+    { }
 
+    virtual result_type extract_feature(Mat& img) {
+        Mat tmp;
+        GaussianBlur(img, tmp, Size(5, 5), 1.2);
         vector<float> resf;
-        hog.compute(img, resf);
+        hog.compute(tmp, resf);
         features.clear();
         copy(resf.begin(), resf.end(), back_inserter(features));
         return make_pair(&features[0], features.size());
