@@ -12,32 +12,37 @@ extern "C" {
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include <opencv2/features2d/features2d.hpp>
+#include <cv.h>
+
 using namespace cv;
 
 #include "InputFileEntry.h"
+#include "FeatureExtractor.h"
 #include "Svm.h"
 #include "common.h"
 
 using namespace std;
 
 
-void build_model(const string& inp, const string& out);
-void run_model(const string &inp, const string &model_file, const string &out) ;
+void build_model(const string& inp, const string& out, FeatureExtractor&);
+void run_model(const string &inp, const string &model_file, const string &out, FeatureExtractor&);
 
 void cmd_args_guard(bool cond, const string& prog);
 
 int main (int argc, const char * argv[]) {
     cmd_args_guard(argc > 2, argv[0]);
 
+    RawImageExtractor ext;
     if (string("train").compare(argv[1]) == 0) {
         cmd_args_guard(argc == 4, argv[0]);
 
-        build_model(argv[2], argv[3]);
+        build_model(argv[2], argv[3], ext);
         return 0;
     }
     if (string("test").compare(argv[1]) == 0) {
         cmd_args_guard(argc == 5, argv[0]);
-        run_model(argv[2], argv[3], argv[4]);
+        run_model(argv[2], argv[3], argv[4], ext);
         return 0;
     }
     cmd_args_guard(false, argv[0]);
@@ -72,7 +77,7 @@ Mat try_read_image(const string &fname) {
     return image;
 }
 
-void build_model(const string &inp, const string &out) {
+void build_model(const string &inp, const string &out, FeatureExtractor& ext) {
     vector<InputFileEntry> input_data;
     bool succ_read = read_input_file(inp, input_data);
     ASSERT(succ_read, "Error reading file: " << inp);
@@ -81,7 +86,9 @@ void build_model(const string &inp, const string &out) {
     SvmClassifierBuilder clfb(VlSvmSolverSgd, 0.01);
     for (auto e: input_data) {
         Mat img = try_read_image(e.get_fname());
-        clfb.add_data(img.begin<uchar>(), img.end<uchar>(), e.get_label());
+        auto data = ext.extract_feature(img);
+        clfb.set_dim(data.second);
+        clfb.add_data(data.first, e.get_label());
     }
 
     cout << "Processing " << input_data.size() << " images..." << endl;
@@ -98,7 +105,7 @@ void build_model(const string &inp, const string &out) {
 }
 
 
-void run_model(const string &inp, const string &model_file, const string &out) {
+void run_model(const string &inp, const string &model_file, const string &out, FeatureExtractor& ext) {
     cout << "Read model from " << model_file << "..." << endl;
     ifstream is(model_file, std::ios::binary);
     ASSERT(is.is_open(), "Error reading file: " << model_file);
@@ -120,7 +127,8 @@ void run_model(const string &inp, const string &model_file, const string &out) {
     os << "# FILENAME | ACTUAL | PREDICTION" << endl;
     for (auto& img_fname: input_data) {
         auto img = try_read_image(img_fname.get_fname());
-        int predicted_class = clf->predict(img.ptr<uchar>());
+        auto res = ext.extract_feature(img);
+        int predicted_class = clf->predict(res.first);
         os << img_fname.get_fname() << " "
            << img_fname.get_label() << " "
            << predicted_class << endl;

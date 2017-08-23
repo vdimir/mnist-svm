@@ -44,8 +44,7 @@ public:
         return label;
     }
 
-    template<typename T>
-    double predict(T x) {
+    double predict(double* x) {
         double wx = 0;
         for (auto i = 0; i < w.size(); ++i) {
             wx += w[i] * x[i];
@@ -83,8 +82,7 @@ class SvmClassifier {
     vector<unique_ptr<SvmModel> > classifiers;
 public:
 
-    template<typename T>
-    vector<pair<int, double> > predict_vec(T x) {
+    vector<pair<int, double> > predict_vec(double* x) {
         vector<pair<int, double> > res;
         for (auto& clf: classifiers) {
             res.push_back(make_pair( clf->get_label(), clf->predict(x)));
@@ -92,8 +90,7 @@ public:
         return res;
     }
 
-    template<typename T>
-    int predict(T x) {
+    int predict(double* x) {
         auto res = predict_vec(x);
         auto mx = max_element(res.begin(), res.end(),
                     [](const std::pair<int, int>& left, const std::pair<int, int>& right){
@@ -113,6 +110,7 @@ public:
 
 class SvmClassifierBuilder {
     vector<double> data;
+    size_t dim;
     vector<int> labels;
 
     VlSvmSolverType type;
@@ -122,14 +120,27 @@ class SvmClassifierBuilder {
     vector<double> one_hot_enc(int c);
 public:
     SvmClassifierBuilder(VlSvmSolverType type,
-                  double lambda) : lambda(lambda), type(type) { }
+                  double lambda) : lambda(lambda), type(type), dim(0) { }
 
     // create binary classificator for each class
     SvmClassifier* create_classifier();
 
-    template<typename It>
-    void add_data(It beg, It end, int label) {
-        std::copy(beg, end, std::back_inserter(data));
+    void set_dim(size_t n) {
+        if  (dim == 0) {
+            dim = n;
+            return;
+        }
+        if (dim == n) {
+            return;
+        }
+        throw invalid_argument("Data size cannot change");
+    }
+
+    void add_data(double* beg, int label) {
+        if (dim == 0) {
+            throw invalid_argument("Set data size first");
+        }
+        std::copy(beg, beg+dim, std::back_inserter(data));
         labels.push_back(label);
     }
 };
